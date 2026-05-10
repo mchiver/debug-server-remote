@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html ng-app="debugBridgeApp">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>LlmDebugBridge</title>
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+	<style>
+		body { background-color: #f8f9fa; }
+		.session-card { cursor: pointer; }
+		.session-card.active { border-left: 4px solid #0d6efd; background-color: #e7f1ff; }
+		.console-output {
+			background-color: #212529;
+			color: #f8f9fa;
+			font-family: 'Courier New', monospace;
+			font-size: 0.875rem;
+			height: 300px;
+			overflow-y: auto;
+			padding: 0.75rem;
+			border-radius: 0.375rem;
+			white-space: pre-wrap;
+			word-break: break-all;
+		}
+		.console-line { line-height: 1.4; }
+		.console-line.stdout { color: #f8f9fa; }
+		.console-line.stderr { color: #dc3545; }
+		.status-badge { font-size: 0.75rem; }
+		.debugger-toolbar .btn { min-width: 90px; }
+		.stack-table { font-size: 0.875rem; }
+		.variables-table { font-size: 0.875rem; }
+		.nav-pills .nav-link { cursor: pointer; }
+		.source-view {
+			background-color: #1e1e1e;
+			color: #d4d4d4;
+			font-family: 'Courier New', monospace;
+			font-size: 0.875rem;
+			height: 400px;
+			overflow-y: auto;
+			border-radius: 0.375rem;
+			padding: 0.5rem 0;
+		}
+		.source-line {
+			display: flex;
+			padding: 0 0.75rem;
+			white-space: pre;
+			cursor: pointer;
+		}
+		.source-line:hover { background-color: #2a2d2e; }
+		.source-line.current-line {
+			background-color: #2d2d1f;
+			border-left: 3px solid #ffd700;
+		}
+		.line-number {
+			width: 40px;
+			min-width: 40px;
+			text-align: right;
+			padding-right: 0.75rem;
+			color: #858585;
+			user-select: none;
+		}
+		.line-number.breakpoint-marked { color: #ff6b6b; }
+		.line-number.breakpoint-marked::before {
+			content: '\25CF ';
+			color: #ff6b6b;
+		}
+		.line-content { flex: 1; overflow: hidden; }
+		.ws-indicator {
+			font-size: 0.75rem;
+			padding: 0.125rem 0.5rem;
+			border-radius: 0.25rem;
+		}
+		.ws-indicator.disconnected { background-color: #dc3545; color: white; }
+		.editor-textarea {
+			background-color: #1e1e1e;
+			color: #d4d4d4;
+			font-family: 'Courier New', monospace;
+			font-size: 0.875rem;
+			height: 400px;
+			width: 100%;
+			border: none;
+			border-radius: 0.375rem;
+			padding: 0.75rem;
+			resize: vertical;
+		}
+		.editor-textarea:focus {
+			outline: none;
+			box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+		}
+		.exec-output {
+			background-color: #1e1e1e;
+			color: #d4d4d4;
+			font-family: 'Courier New', monospace;
+			font-size: 0.75rem;
+			height: 150px;
+			overflow-y: auto;
+			border-radius: 0.375rem;
+			padding: 0.75rem;
+			white-space: pre-wrap;
+		}
+		.file-tree-item {
+			cursor: pointer;
+			padding: 0.25rem 0.5rem;
+			border-radius: 0.25rem;
+		}
+		.file-tree-item:hover { background-color: #e9ecef; }
+		.file-tree-item.active { background-color: #dee2e6; font-weight: 600; }
+		.nav-view-link { cursor: pointer; }
+		.nav-view-link.active { font-weight: 600; text-decoration: underline; }
+	</style>
+</head>
+<body ng-controller="MainController as main">
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+	<div class="container-fluid">
+		<span class="navbar-brand mb-0 h1">LlmDebugBridge</span>
+		<div class="d-flex align-items-center">
+			<ul class="navbar-nav me-3 d-flex flex-row">
+				<li class="nav-item me-3">
+					<span class="nav-link nav-view-link" ng-class="{ active: main.current_view === 'workspaces' }" ng-click="main.current_view = 'workspaces'">Workspaces</span>
+				</li>
+				<li class="nav-item me-3">
+					<span class="nav-link nav-view-link" ng-class="{ active: main.current_view === 'sessions' }" ng-click="main.current_view = 'sessions'">Sessions</span>
+				</li>
+				<li class="nav-item">
+					<span class="nav-link nav-view-link" ng-class="{ active: main.current_view === 'triage' }" ng-click="main.current_view = 'triage'">Triage</span>
+				</li>
+			</ul>
+			<span class="ws-indicator disconnected me-3" ng-if="!main.ws_connected">disconnected</span>
+			<button class="btn btn-primary btn-sm" ng-click="main.openNewSessionModal()">New Session</button>
+		</div>
+	</div>
+</nav>
+
+<div class="container-fluid mt-3">
+	<div ng-show="main.current_view === 'workspaces'" ng-controller="WorkspaceController as ws">
+		<div class="row">
+			<div class="col-md-4">
+				<div class="d-flex justify-content-between align-items-center mb-3">
+					<h5 class="mb-0">Workspaces</h5>
+					<button class="btn btn-primary btn-sm" ng-click="ws.openCreateModal()">Create</button>
+				</div>
+				<table class="table table-sm table-hover">
+					<thead><tr><th>Name</th><th>Files</th><th>Updated</th><th></th></tr></thead>
+					<tbody>
+						<tr ng-repeat="w in ws.workspaces" ng-click="ws.selectWorkspace(w)" style="cursor: pointer;" ng-class="{ 'table-active': ws.selected_workspace && ws.selected_workspace.id === w.id }">
+							<td>{{ w.name }}</td>
+							<td>{{ w.file_count || 0 }}</td>
+							<td>{{ w.updated_at | date:'short' }}</td>
+							<td>
+								<button class="btn btn-sm btn-outline-danger" ng-click="ws.deleteWorkspace(w.id, $event)">Delete</button>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="text-muted text-center" ng-if="ws.workspaces.length === 0">No workspaces yet.</div>
+			</div>
+			<div class="col-md-8" ng-if="ws.selected_workspace">
+				<div class="d-flex justify-content-between align-items-center mb-3">
+					<div>
+						<h5 class="mb-0">{{ ws.selected_workspace.name }}</h5>
+						<small class="text-muted">{{ ws.selected_workspace.id }}</small>
+					</div>
+					<div>
+						<button class="btn btn-success btn-sm me-2" ng-click="main.openNewSessionModal(ws.selected_workspace.id)">Launch Session</button>
+						<button class="btn btn-outline-secondary btn-sm" ng-click="ws.refreshFiles()">Refresh</button>
+					</div>
+				</div>
+				<div class="row">
+					<div class="col-md-4">
+						<div class="d-flex justify-content-between align-items-center mb-2">
+							<strong>Files</strong>
+							<div>
+								<button class="btn btn-sm btn-outline-primary me-1" ng-click="ws.openNewFileModal()">New</button>
+								<button class="btn btn-sm btn-outline-secondary" ng-click="ws.triggerUpload()">Upload</button>
+								<input type="file" id="ws-upload-input" style="display: none;" onchange="angular.element(this).scope().ws.handleUpload(this)">
+							</div>
+						</div>
+						<div class="list-group">
+							<div class="list-group-item file-tree-item"
+								 ng-class="{ active: ws.selected_file && ws.selected_file.path === f.path }"
+								 ng-repeat="f in ws.files"
+								 ng-click="ws.selectFile(f)">
+								<div class="d-flex justify-content-between align-items-center">
+									<small>{{ f.path }}</small>
+									<button class="btn btn-sm btn-link text-danger" ng-click="ws.deleteFile(f.path, $event)">×</button>
+								</div>
+								<small class="text-muted">{{ f.size }} bytes</small>
+							</div>
+						</div>
+						<div class="text-muted text-center mt-3" ng-if="ws.files.length === 0">No files.</div>
+					</div>
+					<div class="col-md-8">
+						<div ng-if="ws.selected_file && ws.is_text_file">
+							<div class="d-flex justify-content-between align-items-center mb-2">
+								<strong>{{ ws.selected_file.path }}</strong>
+								<button class="btn btn-sm btn-primary" ng-click="ws.saveFile()">Save</button>
+							</div>
+							<textarea class="editor-textarea" ng-model="ws.file_content"></textarea>
+						</div>
+						<div ng-if="ws.selected_file && !ws.is_text_file" class="alert alert-info">
+							<strong>{{ ws.selected_file.path }}</strong><br>
+							{{ ws.selected_file.size }} bytes — binary file, editing disabled.
+						</div>
+						<div ng-if="!ws.selected_file" class="text-muted text-center mt-5">Select a file to edit.</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Create Workspace Modal -->
+		<div class="modal" tabindex="-1" style="display: block; background: rgba(0,0,0,0.5);" ng-show="ws.show_create_modal" ng-click="ws.closeCreateModal($event)">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h5 class="modal-title">Create Workspace</h5>
+						<button type="button" class="btn-close" ng-click="ws.show_create_modal = false"></button>
+					</div>
+					<div class="modal-body">
+						<label class="form-label">Name (optional)</label>
+						<input type="text" class="form-control" ng-model="ws.new_workspace_name" placeholder="auto-generated if empty">
+					</div>
+					<div class="modal-footer">
+						<button class="btn btn-secondary" ng-click="ws.show_create_modal = false">Cancel</button>
+						<button class="btn btn-primary" ng-click="ws.createWorkspace()">Create</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- New File Modal -->
+		<div class="modal" tabindex="-1" style="display: block; background: rgba(0,0,0,0.5);" ng-show="ws.show_new_file_modal" ng-click="ws.closeNewFileModal($event)">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h5 class="modal-title">New File</h5>
+						<button type="button" class="btn-close" ng-click="ws.show_new_file_modal = false"></button>
+					</div>
+					<div class="modal-body">
+						<label class="form-label">Relative path</label>
+						<input type="text" class="form-control" ng-model="ws.new_file_path" placeholder="e.g. src/main.js">
+					</div>
+					<div class="modal-footer">
+						<button class="btn btn-secondary" ng-click="ws.show_new_file_modal = false">Cancel</button>
+						<button class="btn btn-primary" ng-click="ws.createNewFile()">Create</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div ng-show="main.current_view === 'sessions'" ng-controller="SessionController as ctrl">
+		<div class="row">
+			<div class="col-md-3">
+				<h5 class="mb-3">Sessions</h5>
+				<div class="list-group">
+					<div class="list-group-item session-card"
+						 ng-class="{ active: ctrl.selected_session && ctrl.selected_session.id === session.id }"
+						 ng-repeat="session in ctrl.sessions"
+						 ng-click="ctrl.selectSession(session)">
+						<div class="d-flex justify-content-between align-items-center">
+							<strong class="text-truncate" style="max-width: 140px;" title="{{ session.id }}">{{ session.id.substring(0, 8) }}...</strong>
+							<span class="badge status-badge"
+								  ng-class="{
+										'bg-success': session.status === 'running',
+										'bg-warning': session.status === 'paused',
+										'bg-secondary': session.status === 'spawning',
+										'bg-danger': session.status === 'exited'
+									  }">{{ session.status }}</span>
+						</div>
+						<small class="text-muted">{{ session.engine }} {{ session.engine_version || '' }}</small>
+						<div ng-if="session.workspace_id"><small class="text-muted">ws: {{ session.workspace_id.substring(0,8) }}</small></div>
+					</div>
+				</div>
+				<div class="text-muted text-center mt-3" ng-if="ctrl.sessions.length === 0">No active sessions.</div>
+			</div>
+
+			<div class="col-md-9" ng-if="ctrl.selected_session">
+				<div class="d-flex justify-content-between align-items-center mb-3">
+					<div>
+						<h5 class="mb-0">Session {{ ctrl.selected_session.id.substring(0, 8) }}</h5>
+						<small class="text-muted">{{ ctrl.selected_session.file_path }}</small>
+						<div><small class="text-muted">Engine: {{ ctrl.selected_session.engine }} {{ ctrl.selected_session.engine_version || '' }} | PID: {{ ctrl.selected_session.pid || 'N/A' }}</small></div>
+					</div>
+					<div>
+						<button class="btn btn-outline-warning btn-sm me-2" ng-click="ctrl.restartSession(ctrl.selected_session.id)">Restart</button>
+						<button class="btn btn-outline-danger btn-sm" ng-click="ctrl.killSession(ctrl.selected_session.id)">Kill</button>
+					</div>
+				</div>
+
+				<div class="debugger-toolbar mb-3 d-flex align-items-center flex-wrap gap-2">
+					<button class="btn btn-success btn-sm"
+							ng-disabled="ctrl.selected_session.status !== 'paused'"
+							ng-click="ctrl.debugResume()">Resume</button>
+					<button class="btn btn-outline-primary btn-sm"
+							ng-disabled="ctrl.selected_session.status !== 'paused'"
+							ng-click="ctrl.debugStepOver()">Step Over</button>
+					<button class="btn btn-outline-primary btn-sm"
+							ng-disabled="ctrl.selected_session.status !== 'paused'"
+							ng-click="ctrl.debugStepInto()">Step Into</button>
+					<button class="btn btn-outline-primary btn-sm"
+							ng-disabled="ctrl.selected_session.status !== 'paused'"
+							ng-click="ctrl.debugStepOut()">Step Out</button>
+					<div class="vr mx-2"></div>
+					<label class="small text-muted mb-0">Break on first line:</label>
+					<input type="checkbox" class="form-check-input" style="margin-top: 0;"
+						   ng-model="ctrl.selected_session.break_on_first_line"
+						   ng-change="ctrl.updateSettings()"
+						   title="Applies on next restart">
+					<label class="small text-muted mb-0 ms-3">Pause on exceptions:</label>
+					<select class="form-select form-select-sm" style="width: auto;"
+							ng-model="ctrl.exception_pause"
+							ng-change="ctrl.setExceptionPause()"
+							ng-disabled="ctrl.selected_session.status === 'exited'">
+						<option value="none">none</option>
+						<option value="uncaught">uncaught</option>
+						<option value="all">all</option>
+					</select>
+				</div>
+
+				<ul class="nav nav-pills mb-3">
+					<li class="nav-item"><a class="nav-link" ng-class="{ active: ctrl.active_tab === 'console' }" ng-click="ctrl.active_tab = 'console'">Console</a></li>
+					<li class="nav-item"><a class="nav-link" ng-class="{ active: ctrl.active_tab === 'input' }" ng-click="ctrl.active_tab = 'input'">Input</a></li>
+					<li class="nav-item"><a class="nav-link" ng-class="{ active: ctrl.active_tab === 'exec' }" ng-click="ctrl.active_tab = 'exec'">Exec</a></li>
+					<li class="nav-item"><a class="nav-link" ng-class="{ active: ctrl.active_tab === 'source' }" ng-click="ctrl.active_tab = 'source'">Source</a></li>
+					<li class="nav-item"><a class="nav-link" ng-class="{ active: ctrl.active_tab === 'stack' }" ng-click="ctrl.active_tab = 'stack'">Call Stack</a></li>
+					<li class="nav-item"><a class="nav-link" ng-class="{ active: ctrl.active_tab === 'variables' }" ng-click="ctrl.active_tab = 'variables'">Variables</a></li>
+					<li class="nav-item"><a class="nav-link" ng-class="{ active: ctrl.active_tab === 'evaluate' }" ng-click="ctrl.active_tab = 'evaluate'">Evaluate</a></li>
+					<li class="nav-item"><a class="nav-link" ng-class="{ active: ctrl.active_tab === 'breakpoints' }" ng-click="ctrl.active_tab = 'breakpoints'">Breakpoints</a></li>
+					<li class="nav-item"><a class="nav-link" ng-class="{ active: ctrl.active_tab === 'logs' }" ng-click="ctrl.active_tab = 'logs'">Logs</a></li>
+				</ul>
+
+				<div ng-show="ctrl.active_tab === 'console'">
+					<div class="d-flex justify-content-end mb-2">
+						<button class="btn btn-outline-secondary btn-sm" ng-click="ctrl.clearConsole()">Clear</button>
+					</div>
+					<div class="console-output" id="console-output">
+						<div class="console-line" ng-class="line.source" ng-repeat="line in ctrl.console_lines">{{ line.text }}</div>
+					</div>
+				</div>
+
+				<div ng-show="ctrl.active_tab === 'input'">
+					<div class="mb-3">
+						<label class="form-label">Send to stdin</label>
+						<textarea class="form-control" rows="3" ng-model="ctrl.stdin_input" placeholder="Type input here..."></textarea>
+					</div>
+					<button class="btn btn-primary btn-sm" ng-click="ctrl.sendInput()">Send</button>
+				</div>
+
+				<div ng-show="ctrl.active_tab === 'exec'">
+					<div class="mb-3">
+						<label class="form-label">Shell command (runs in session environment)</label>
+						<div class="input-group">
+							<input type="text" class="form-control" ng-model="ctrl.exec_command" placeholder="npm install">
+							<button class="btn btn-primary" ng-click="ctrl.runExec()">Run</button>
+						</div>
+					</div>
+					<div ng-if="ctrl.exec_result">
+						<div class="alert alert-secondary mb-2">
+							<strong>Exit code:</strong> {{ ctrl.exec_result.exit_code }}
+						</div>
+						<div ng-if="ctrl.exec_result.stdout" class="exec-output mb-2">{{ ctrl.exec_result.stdout }}</div>
+						<div ng-if="ctrl.exec_result.stderr" class="exec-output" style="color: #dc3545;">{{ ctrl.exec_result.stderr }}</div>
+					</div>
+				</div>
+
+				<div ng-show="ctrl.active_tab === 'source'">
+					<div class="source-view">
+						<div class="source-line"
+							 ng-class="{ 'current-line': ($index + 1) === ctrl.current_line }"
+							 ng-repeat="line in ctrl.source_lines"
+							 ng-click="ctrl.toggleBreakpoint($index + 1, $event)">
+							<span class="line-number"
+								  ng-class="{ 'breakpoint-marked': ctrl.line_breakpoints.indexOf($index + 1) !== -1 }">{{ $index + 1 }}</span>
+							<span class="line-content">{{ line }}</span>
+						</div>
+					</div>
+					<div class="text-muted" ng-if="ctrl.source_lines.length === 0">No source available for this session.</div>
+				</div>
+
+				<div ng-show="ctrl.active_tab === 'stack'">
+					<table class="table table-sm table-striped stack-table">
+						<thead><tr><th>Function</th><th>File</th><th>Line</th></tr></thead>
+						<tbody>
+							<tr ng-repeat="frame in ctrl.call_stack" ng-click="ctrl.selectFrame($index)" style="cursor: pointer;" ng-class="{'table-active': ctrl.selected_frame_index === $index}">
+								<td>{{ frame.function_name }}</td>
+								<td>{{ frame.url }}</td>
+								<td>{{ frame.line_number }}</td>
+							</tr>
+						</tbody>
+					</table>
+					<div class="text-muted" ng-if="ctrl.call_stack.length === 0">No call stack available. Process must be paused.</div>
+				</div>
+
+				<div ng-show="ctrl.active_tab === 'variables'">
+					<div class="mb-2"><strong>Frame {{ ctrl.selected_frame_index + 1 }} Variables (Local Scope)</strong></div>
+					<table class="table table-sm table-striped variables-table">
+						<thead><tr><th>Name</th><th>Type</th><th>Value</th></tr></thead>
+						<tbody>
+							<tr ng-repeat="variable in ctrl.variables">
+								<td>{{ variable.name }}</td>
+								<td>{{ variable.type }}</td>
+								<td>{{ variable.value }}</td>
+							</tr>
+						</tbody>
+					</table>
+					<div class="text-muted" ng-if="ctrl.variables.length === 0">No variables available. Select a frame while paused.</div>
+				</div>
+
+				<div ng-show="ctrl.active_tab === 'evaluate'">
+					<div class="mb-3">
+						<textarea class="form-control" rows="3" ng-model="ctrl.evaluate_expression" placeholder="Enter expression..."></textarea>
+					</div>
+					<p><button class="btn btn-sm btn-primary" ng-click="ctrl.runEvaluate()">Evaluate</button></p>
+					<div class="alert alert-secondary" ng-if="ctrl.evaluate_result">
+						<strong>Result:</strong> {{ ctrl.evaluate_result.value }} <em class="text-muted">({{ ctrl.evaluate_result.type }})</em>
+					</div>
+					<div class="alert alert-danger" ng-if="ctrl.evaluate_error">
+						<strong>Error:</strong> {{ ctrl.evaluate_error }}
+					</div>
+				</div>
+
+				<div ng-show="ctrl.active_tab === 'breakpoints'">
+					<div class="mb-3">
+						<div class="input-group input-group-sm">
+							<input type="text" class="form-control" ng-model="ctrl.bp_url" placeholder="Script URL">
+							<input type="number" class="form-control" ng-model="ctrl.bp_line" placeholder="Line">
+							<button class="btn btn-primary" type="button" ng-click="ctrl.addBreakpoint()">Set Breakpoint</button>
+						</div>
+					</div>
+					<table class="table table-sm table-striped">
+						<thead><tr><th>URL</th><th>Line</th><th></th></tr></thead>
+						<tbody>
+							<tr ng-repeat="bp in ctrl.breakpoints">
+								<td>{{ ctrl.formatBreakpointUrl(bp.url) }}</td>
+								<td>{{ bp.line }}</td>
+								<td><button class="btn btn-sm btn-danger" ng-click="ctrl.removeBreakpoint(bp.id)">Remove</button></td>
+							</tr>
+						</tbody>
+					</table>
+					<div class="text-muted" ng-if="ctrl.breakpoints.length === 0">No breakpoints set.</div>
+				</div>
+
+				<div ng-show="ctrl.active_tab === 'logs'">
+					<div class="mb-2"><strong>Inspector Calls &amp; Events Log</strong></div>
+					<div style="background-color: #1e1e1e; color: #d4d4d4; font-family: 'Courier New', monospace; font-size: 0.75rem; height: 400px; overflow-y: auto; border-radius: 0.375rem; padding: 0.75rem;">
+						<div ng-repeat="entry in ctrl.log_entries" style="margin-bottom: 0.25rem;">
+							<span style="color: #858585;">{{ entry.timestamp }}</span>
+							<span ng-if="entry.direction === 'call'" class="badge bg-primary me-1">CALL</span>
+							<span ng-if="entry.direction === 'request'" class="badge bg-info me-1">REQ</span>
+							<span ng-if="entry.direction === 'response'" class="badge bg-success me-1">RES</span>
+							<span ng-if="entry.direction === 'event'" class="badge bg-warning text-dark me-1">EVENT</span>
+							<span ng-if="entry.direction === 'internal'" class="badge bg-secondary me-1">INT</span>
+							<strong>{{ entry.method || entry.event || 'log' }}</strong>
+							<span style="color: #9cdcfe;" ng-if="entry.data">{{ ctrl.formatLogData(entry.data) }}</span>
+						</div>
+					</div>
+					<div class="text-muted" ng-if="ctrl.log_entries.length === 0">No log entries yet.</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div ng-show="main.current_view === 'triage'" ng-controller="TriageController as triage">
+		<div class="row">
+			<div class="col-md-5">
+				<h5 class="mb-3">Triage Run</h5>
+				<div class="mb-3">
+					<label class="form-label">Code Snippet</label>
+					<textarea class="form-control" rows="12" ng-model="triage.snippet" placeholder="Paste code here..."></textarea>
+				</div>
+				<div class="mb-3">
+					<label class="form-label">Engine</label>
+					<select class="form-select form-select-sm mb-2" ng-model="triage.selected_engine_base" ng-options="e.base as e.base for e in triage.registry" ng-change="triage.onEngineChange()"></select>
+					<select class="form-select form-select-sm" ng-model="triage.selected_version" ng-options="v.version_string as ('v' + v.version_string + (v.broken ? ' [BROKEN]' : '')) for v in triage.versions"></select>
+				</div>
+				<div class="mb-3">
+					<div class="form-check">
+						<input class="form-check-input" type="checkbox" id="triageBreakFirst" ng-model="triage.break_on_first_line">
+						<label class="form-check-label" for="triageBreakFirst">Break on first line</label>
+					</div>
+				</div>
+				<div class="mb-3">
+					<label class="form-label">Pause on exceptions</label>
+					<select class="form-select form-select-sm" ng-model="triage.exception_pause">
+						<option value="none">none</option>
+						<option value="uncaught">uncaught</option>
+						<option value="all">all</option>
+					</select>
+				</div>
+				<button class="btn btn-primary" ng-click="triage.run()" ng-disabled="triage.running">Run</button>
+			</div>
+			<div class="col-md-7" ng-if="triage.result">
+				<h5 class="mb-3">Results</h5>
+				<div class="alert" ng-class="{
+					'alert-success': triage.result.kind === 'success',
+					'alert-danger': triage.result.kind === 'exception',
+					'alert-warning': triage.result.kind === 'timeout',
+					'alert-secondary': triage.result.kind === 'error'
+				}">
+					<strong>Kind:</strong> {{ triage.result.kind }} |
+					<strong>Exit code:</strong> {{ triage.result.exit_code }} |
+					<strong>Duration:</strong> {{ triage.result.duration_ms }}ms
+				</div>
+				<div ng-if="triage.result.stdout.length > 0">
+					<strong>stdout</strong>
+					<pre class="exec-output">{{ triage.result.stdout.join('\n') }}</pre>
+				</div>
+				<div ng-if="triage.result.stderr.length > 0">
+					<strong>stderr</strong>
+					<pre class="exec-output" style="color: #dc3545;">{{ triage.result.stderr.join('\n') }}</pre>
+				</div>
+				<div ng-if="triage.result.exception">
+					<strong>Exception</strong>
+					<pre class="exec-output">{{ triage.result.exception.description || triage.result.exception.value }}</pre>
+				</div>
+				<div ng-if="triage.result.stack && triage.result.stack.length > 0">
+					<strong>Stack</strong>
+					<table class="table table-sm table-striped">
+						<thead><tr><th>Function</th><th>File</th><th>Line</th></tr></thead>
+						<tbody>
+							<tr ng-repeat="frame in triage.result.stack">
+								<td>{{ frame.function_name }}</td>
+								<td>{{ frame.url }}</td>
+								<td>{{ frame.line_number }}</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<div ng-if="triage.result.locals && triage.result.locals.length > 0">
+					<strong>Locals at throw</strong>
+					<table class="table table-sm table-striped">
+						<thead><tr><th>Name</th><th>Type</th><th>Value</th></tr></thead>
+						<tbody>
+							<tr ng-repeat="v in triage.result.locals">
+								<td>{{ v.name }}</td>
+								<td>{{ v.type }}</td>
+								<td>{{ v.value }}</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- New Session Modal (global) -->
+<div class="modal" tabindex="-1" id="newSessionModal" style="display: block; background: rgba(0,0,0,0.5);" ng-show="main.show_session_modal" ng-click="main.closeSessionModal($event)">
+	<div class="modal-dialog modal-lg">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">New Debug Session</h5>
+				<button type="button" class="btn-close" ng-click="main.show_session_modal = false"></button>
+			</div>
+			<div class="modal-body">
+				<ul class="nav nav-tabs mb-3">
+					<li class="nav-item">
+						<a class="nav-link" ng-class="{ active: main.modal_tab === 'workspace' }" ng-click="main.modal_tab = 'workspace'">Workspace</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link" ng-class="{ active: main.modal_tab === 'snippet' }" ng-click="main.modal_tab = 'snippet'">Code Snippet</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link" ng-class="{ active: main.modal_tab === 'files' }" ng-click="main.modal_tab = 'files'">Multi-file</a>
+					</li>
+				</ul>
+
+				<div ng-show="main.modal_tab === 'workspace'">
+					<div class="mb-3">
+						<label class="form-label">Workspace</label>
+						<select class="form-select" ng-model="main.modal_workspace_id" ng-options="w.id as w.name for w in main.workspaces"></select>
+					</div>
+					<div class="mb-3">
+						<label class="form-label">Relative path (entry file)</label>
+						<input type="text" class="form-control" ng-model="main.modal_relative_path" placeholder="e.g. main.js">
+					</div>
+				</div>
+
+				<div ng-show="main.modal_tab === 'snippet'">
+					<textarea class="form-control" rows="10" ng-model="main.modal_snippet" placeholder="Paste code here..."></textarea>
+				</div>
+
+				<div ng-show="main.modal_tab === 'files'">
+					<div class="mb-2"><strong>Files</strong></div>
+					<div class="mb-2" ng-repeat="file in main.modal_files">
+						<div class="input-group input-group-sm mb-1">
+							<input type="text" class="form-control" ng-model="file.name" placeholder="filename">
+							<button class="btn btn-outline-danger" ng-click="main.removeModalFile($index)">×</button>
+						</div>
+						<textarea class="form-control form-control-sm mb-2" rows="3" ng-model="file.content" placeholder="file content..."></textarea>
+					</div>
+					<button class="btn btn-sm btn-outline-primary" ng-click="main.addModalFile()">+ Add file</button>
+					<div class="mt-3">
+						<label class="form-label">Entry file</label>
+						<input type="text" class="form-control" ng-model="main.modal_entry" placeholder="e.g. main.js">
+					</div>
+				</div>
+
+				<hr>
+				<div class="mb-3">
+					<label class="form-label">Engine</label>
+					<select class="form-select form-select-sm mb-2" ng-model="main.modal_engine_base" ng-options="e.base as e.base for e in main.registry" ng-change="main.onModalEngineChange()"></select>
+					<select class="form-select form-select-sm" ng-model="main.modal_engine_version" ng-options="v.version_string as ('v' + v.version_string + (v.broken ? ' [BROKEN]' : '')) for v in main.modal_versions"></select>
+				</div>
+				<div class="mb-3">
+					<div class="form-check">
+						<input class="form-check-input" type="checkbox" id="modalBreakFirst" ng-model="main.modal_break_first">
+						<label class="form-check-label" for="modalBreakFirst">Break on first line</label>
+					</div>
+				</div>
+				<div class="mb-3">
+					<label class="form-label">Pause on exceptions</label>
+					<select class="form-select form-select-sm" ng-model="main.modal_exception_pause">
+						<option value="none">none</option>
+						<option value="uncaught">uncaught</option>
+						<option value="all">all</option>
+					</select>
+				</div>
+				<div class="mb-3">
+					<label class="form-label">Environment Variables</label>
+					<div class="mb-1" ng-repeat="env in main.modal_env_vars">
+						<div class="input-group input-group-sm">
+							<input type="text" class="form-control" ng-model="env.key" placeholder="KEY">
+							<input type="text" class="form-control" ng-model="env.value" placeholder="value">
+							<button class="btn btn-outline-danger" ng-click="main.removeModalEnv($index)">×</button>
+						</div>
+					</div>
+					<button class="btn btn-sm btn-outline-primary" ng-click="main.addModalEnv()">+ Add variable</button>
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" ng-click="main.show_session_modal = false">Cancel</button>
+				<button type="button" class="btn btn-primary" ng-click="main.createSession()">Start Session</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.3/angular.min.js"></script>
+<script src="js/app.js"></script>
+<script src="js/workspaces.js"></script>
+<script src="js/sessions.js"></script>
+<script src="js/triage.js"></script>
+</body>
+</html>

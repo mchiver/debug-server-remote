@@ -1,0 +1,22 @@
+{
+	"name": "@mchiver/debug-server-remote",
+	"version": "0.1.0",
+	"description": "Gives LLMs debugging powers in an isolated and controlled remote environment.",
+	"main": "server.js",
+	"scripts": {
+		"start": "node server.js",
+		"mcp": "node mcp.js",
+		"env": "node env.js",
+		"test": "node --test --test-concurrency=1 --test-reporter=spec ./test/*.test.js"
+	},
+	"dependencies": {
+		"debug-bridge": "file:../DebugBridge",
+		"express": "^4.21.0",
+		"moniker": "^0.1.2",
+		"tar": "^6.2.1",
+		"ws": "^8.18.0"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	}
+}
