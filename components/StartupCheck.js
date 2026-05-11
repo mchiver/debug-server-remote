@@ -1,17 +1,16 @@
 const fs = require( 'fs' );
 const ConfigManager = require( './ConfigManager' );
 const EnvRegistry = require( './EnvRegistry' );
-const NodeInstaller = require( './EnvInstaller.Node' );
 
 
 //---------------------------------------------------------------------
-// StartupCheck — ensures the config directory tree exists and auto-installs
-// the latest Node runtime when the registry is completely empty.
+// StartupCheck — ensures the config directory tree exists and warns when
+// the engine registry is empty so the caller knows to install a runtime.
 //---------------------------------------------------------------------
 
 
 //---------------------------------------------------------------------
-async function run()
+function run()
 {
 	ConfigManager.ensure_config_root();
 	fs.mkdirSync( ConfigManager.workspace_root(), { recursive: true } );
@@ -20,10 +19,7 @@ async function run()
 	const engines = EnvRegistry.list_engines();
 	if ( engines.length === 0 )
 	{
-		await NodeInstaller.install( {
-			version: null,
-			on_progress: function( message ) { console.error( '[startup] ' + message ); }
-		} );
+		console.warn( '[startup] Engine registry is empty. Run: npm run env -- install node' );
 	}
 }
 

@@ -1,6 +1,6 @@
 {
 	"name": "@mchiver/debug-server-remote",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Gives LLMs debugging powers in an isolated and controlled remote environment.",
 	"license": "MIT",
 	"author": "Andre' G. Bowlin <agbowlin@gmail.com>",

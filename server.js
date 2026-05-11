@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const express = require( 'express' );
 const http = require( 'http' );
 const path = require( 'path' );
@@ -416,18 +418,12 @@ function gunzip_stream( req )
 if ( require.main === module )
 {
 	const StartupCheck = require( './components/StartupCheck' );
-	StartupCheck.run().then( function()
+	StartupCheck.run();
+	const { server } = create_app();
+	server.listen( PORT, function()
 	{
-		const { server } = create_app();
-		server.listen( PORT, function()
-		{
-			const address = server.address();
-			console.log( 'WorkspaceBridge server running on http://localhost:' + address.port );
-		} );
-	} ).catch( function( err )
-	{
-		console.error( 'Startup check failed:', err.message );
-		process.exit( 1 );
+		const address = server.address();
+		console.log( 'WorkspaceBridge server running on http://localhost:' + address.port );
 	} );
 }
 

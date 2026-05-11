@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const DebugServerLocal = require( '@mchiver/debug-server-local' );
 const WorkspaceManager = require( './components/WorkspaceManager' );
 const Translator = require( './components/Translator' );
@@ -14,7 +16,7 @@ const SessionWorkspaceBinder = require( './components/SessionWorkspaceBinder' );
 //---------------------------------------------------------------------
 
 
-const SERVER_NAME = 'workspace-bridge';
+const SERVER_NAME = 'debug-server-remote';
 const SERVER_VERSION = '0.1.0';
 
 
@@ -170,16 +172,10 @@ function create_server( options )
 if ( require.main === module )
 {
 	const StartupCheck = require( './components/StartupCheck' );
-	StartupCheck.run().then( function()
-	{
-		const { server } = create_server();
-		console.error( '[mcp] WorkspaceBridge MCP server ready on stdio' );
-		server.serve_stdio();
-	} ).catch( function( err )
-	{
-		console.error( 'Startup check failed:', err.message );
-		process.exit( 1 );
-	} );
+	StartupCheck.run();
+	const { server } = create_server();
+	console.error( '[mcp] WorkspaceBridge MCP server ready on stdio' );
+	server.serve_stdio();
 }
 
 
