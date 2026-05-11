@@ -23,6 +23,8 @@ jobs:
 
       - run: npm ci
 
+      - run: node env.js install node
+
       - run: npm test
 
       - run: npm publish --access public
