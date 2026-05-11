@@ -9,7 +9,7 @@ let test_workspaces_root_counter = 0;
 function fresh_workspaces_root()
 {
 	test_workspaces_root_counter = test_workspaces_root_counter + 1;
-	return path.join(os.tmpdir(), 'dbb-test-workspaces-' + process.pid + '-' + Date.now() + '-' + test_workspaces_root_counter);
+	return path.join(os.tmpdir(), 'dsr-test-' + process.pid + '-' + Date.now() + '-' + test_workspaces_root_counter);
 }
 
 //---------------------------------------------------------------------

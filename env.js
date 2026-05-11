@@ -4,10 +4,10 @@ const EnvRegistry = require( './components/EnvRegistry' );
 
 
 //---------------------------------------------------------------------
-// env.js — LlmDebugBridge environment manager.
+// env.js — DebugServer environment manager.
 //
 // Maintains a registry of self-contained runtime environments at
-//   ~/.config/ldb-debug-bridge/env-registry/<engine>/v<x.y.z>/
+//   ~/.config/mchiver/debug-server-remote/registry/<engine>/v<x.y.z>/
 // Each entry is a complete language distribution (plus any tooling like
 // tsx or debugpy) that a debug session activates by manipulating the
 // child process environment.

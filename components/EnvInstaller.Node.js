@@ -247,7 +247,7 @@ async function install( options )
 	}
 
 	const platform_info = platform_archive( version_string );
-	const temp_archive = path.join( os.tmpdir(), 'ldb-' + Date.now() + '-' + platform_info.archive_name );
+	const temp_archive = path.join( os.tmpdir(), 'dsr-' + Date.now() + '-' + platform_info.archive_name );
 
 	on_progress( 'Downloading ' + platform_info.archive_url );
 	await download_to_file( platform_info.archive_url, temp_archive );

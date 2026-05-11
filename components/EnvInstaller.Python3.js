@@ -354,7 +354,7 @@ async function install( options )
 		fs.rmSync( environment_directory, { recursive: true, force: true } );
 	}
 
-	const tmp_archive = path.join( os.tmpdir(), 'ldb-py-' + Date.now() + '-' + asset.name );
+	const tmp_archive = path.join( os.tmpdir(), 'dsr-py-' + Date.now() + '-' + asset.name );
 
 	on_progress( 'Downloading ' + asset.download_url );
 	await download_to_file( asset.download_url, tmp_archive );

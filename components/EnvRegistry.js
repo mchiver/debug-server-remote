@@ -1,11 +1,11 @@
 const fs = require( 'fs' );
 const path = require( 'path' );
-const os = require( 'os' );
+const ConfigManager = require( './ConfigManager' );
 
 
 //---------------------------------------------------------------------
-// EnvRegistry — read/scan helpers for the LlmDebugBridge environment
-// registry rooted at ~/.config/ldb-debug-bridge/env-registry/<engine>/v<x.y.z>/.
+// EnvRegistry — read/scan helpers for the debug-server-remote environment
+// registry rooted at ~/.config/mchiver/debug-server-remote/registry/<engine>/v<x.y.z>/.
 //
 // Each environment directory is a self-contained runtime install (a
 // language distribution plus any bundled tooling such as the tsx loader
@@ -23,7 +23,7 @@ const REGISTRY_FILENAME = 'env-registry.json';
 //---------------------------------------------------------------------
 function registry_root()
 {
-	return path.join( os.homedir(), '.config', 'ldb-debug-bridge', 'env-registry' );
+	return ConfigManager.registry_root();
 }
 
 

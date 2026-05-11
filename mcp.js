@@ -1,4 +1,4 @@
-const DebugBridge = require( 'debug-bridge' );
+const DebugServerLocal = require( '@mchiver/debug-server-local' );
 const WorkspaceManager = require( './components/WorkspaceManager' );
 const Translator = require( './components/Translator' );
 const SessionWorkspaceBinder = require( './components/SessionWorkspaceBinder' );
@@ -31,7 +31,7 @@ const WORKSPACE_PROPERTIES = {
 //---------------------------------------------------------------------
 function build_translated_tools( context )
 {
-	const debug_tools = DebugBridge.TOOLS;
+	const debug_tools = DebugServerLocal.TOOLS;
 	const out = [];
 	for ( let i = 0; i < debug_tools.length; i++ )
 	{
@@ -138,7 +138,7 @@ function create_server( options )
 	const opts = options || {};
 	const workspace_manager = opts.workspace_manager || new WorkspaceManager( opts.workspace_options || {} );
 	const translator = opts.translator || new Translator( { workspace_manager: workspace_manager } );
-	const session_manager = opts.session_manager || new DebugBridge.SessionManager();
+	const session_manager = opts.session_manager || new DebugServerLocal.SessionManager();
 	const binder = opts.binder || new SessionWorkspaceBinder( { workspace_manager: workspace_manager } );
 
 	binder.attach( session_manager );
@@ -149,7 +149,7 @@ function create_server( options )
 		binder:            binder
 	} );
 
-	const server = new DebugBridge.MCPServer( session_manager, {
+	const server = new DebugServerLocal.MCPServer( session_manager, {
 		server_name:    SERVER_NAME,
 		server_version: SERVER_VERSION,
 		tools:          tools
@@ -169,9 +169,17 @@ function create_server( options )
 //---------------------------------------------------------------------
 if ( require.main === module )
 {
-	const { server } = create_server();
-	console.error( '[mcp] WorkspaceBridge MCP server ready on stdio' );
-	server.serve_stdio();
+	const StartupCheck = require( './components/StartupCheck' );
+	StartupCheck.run().then( function()
+	{
+		const { server } = create_server();
+		console.error( '[mcp] WorkspaceBridge MCP server ready on stdio' );
+		server.serve_stdio();
+	} ).catch( function( err )
+	{
+		console.error( 'Startup check failed:', err.message );
+		process.exit( 1 );
+	} );
 }
 
 

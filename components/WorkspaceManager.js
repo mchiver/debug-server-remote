@@ -5,8 +5,9 @@ const { randomUUID } = require('crypto');
 const { pipeline } = require('stream/promises');
 const tar = require('tar');
 const moniker = require('moniker');
+const ConfigManager = require('./ConfigManager');
 
-const METADATA_FILENAME = '.dbb-workspace.json';
+const METADATA_FILENAME = '.debug-server-remote.json';
 const DEFAULT_MAX_BYTES = 100 * 1024 * 1024;
 const NAME_COLLISION_RETRIES = 8;
 
@@ -25,9 +26,10 @@ class WorkspaceManager
 	constructor( options )
 	{
 		const opts = options || {};
-		this.root = opts.root || process.env.WORKSPACES_DIR || path.join( os.tmpdir(), 'dbb-workspaces' );
+		this.root = opts.root || process.env.WORKSPACES_DIR || ConfigManager.workspace_root();
 		this.max_bytes = opts.max_bytes || parseInt( process.env.WORKSPACE_MAX_BYTES || '0', 10 ) || DEFAULT_MAX_BYTES;
 		this._name_generator = opts.name_generator || function() { return moniker.choose(); };
+		ConfigManager.ensure_config_root();
 		fs.mkdirSync( this.root, { recursive: true } );
 	}
 

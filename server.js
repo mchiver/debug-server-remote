@@ -4,7 +4,7 @@ const path = require( 'path' );
 const { exec } = require( 'child_process' );
 const { WebSocketServer } = require( 'ws' );
 
-const DebugBridge = require( 'debug-bridge' );
+const DebugServerLocal = require( '@mchiver/debug-server-local' );
 const WorkspaceManager = require( './components/WorkspaceManager' );
 const EnvRegistry = require( './components/EnvRegistry' );
 const Translator = require( './components/Translator' );
@@ -31,7 +31,7 @@ function create_app( options )
 	const opts = options || {};
 	const workspace_manager = opts.workspace_manager || new WorkspaceManager( opts.workspace_options || {} );
 	const translator = opts.translator || new Translator( { workspace_manager: workspace_manager } );
-	const session_manager = opts.session_manager || new DebugBridge.SessionManager();
+	const session_manager = opts.session_manager || new DebugServerLocal.SessionManager();
 	const binder = opts.binder || new SessionWorkspaceBinder( { workspace_manager: workspace_manager } );
 
 	const app = express();
@@ -376,7 +376,7 @@ function create_app( options )
 	// dispatch means our overrides above win for the three paths they
 	// register; this mount serves the rest.
 	//---------------------------------------------------------------------
-	const debug_router = DebugBridge.create_router( { session_manager: session_manager } );
+	const debug_router = DebugServerLocal.create_router( { session_manager: session_manager } );
 	app.use( '/api', debug_router );
 
 	return {
@@ -415,11 +415,19 @@ function gunzip_stream( req )
 //---------------------------------------------------------------------
 if ( require.main === module )
 {
-	const { server } = create_app();
-	server.listen( PORT, function()
+	const StartupCheck = require( './components/StartupCheck' );
+	StartupCheck.run().then( function()
 	{
-		const address = server.address();
-		console.log( 'WorkspaceBridge server running on http://localhost:' + address.port );
+		const { server } = create_app();
+		server.listen( PORT, function()
+		{
+			const address = server.address();
+			console.log( 'WorkspaceBridge server running on http://localhost:' + address.port );
+		} );
+	} ).catch( function( err )
+	{
+		console.error( 'Startup check failed:', err.message );
+		process.exit( 1 );
 	} );
 }
 

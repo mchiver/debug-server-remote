@@ -91,7 +91,7 @@ async function install( options )
 	}
 
 	const platform_info = NodeInstaller.platform_archive( version_string );
-	const tmp_archive = path.join( require( 'os' ).tmpdir(), 'ldb-tsx-' + Date.now() + '-' + platform_info.archive_name );
+	const tmp_archive = path.join( require( 'os' ).tmpdir(), 'dsr-tsx-' + Date.now() + '-' + platform_info.archive_name );
 
 	on_progress( 'Downloading ' + platform_info.archive_url );
 	await NodeInstaller.download_to_file( platform_info.archive_url, tmp_archive );

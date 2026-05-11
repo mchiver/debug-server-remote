@@ -8,7 +8,7 @@ WorkspaceBridge owns:
   and tar upload support.
 - **Engines** — language-engine installation and version selection
   (`node@22.5.1`, `node-tsx`, `python3`, ...) via the env registry under
-  `~/.config/ldb-debug-bridge/env-registry/`.
+  `~/.config/mchiver/debug-server-remote/registry/`.
 - **Dashboard** — an AngularJS + Bootstrap UI for managing all of the above.
 - **Translation** — a single `Translator` component that converts requests
   written in `{ workspace_id, relative_path, engine }` shape into the

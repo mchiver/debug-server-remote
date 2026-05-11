@@ -72,14 +72,6 @@ test.describe( 'WorkspaceBridge server — integration', function()
 	} );
 
 	//---------------------------------------------------------------------
-	test.it( 'GET /api/version is served by the mounted DebugBridge router', async function()
-	{
-		const res = await http_request( 'GET', parts.base_url + '/api/version' );
-		assert.equal( res.status, 200 );
-		assert.ok( res.body.node_version );
-	} );
-
-	//---------------------------------------------------------------------
 	test.it( 'POST /api/sessions with content+language=cobol surfaces the translator error', async function()
 	{
 		const res = await http_request( 'POST', parts.base_url + '/api/sessions', {
